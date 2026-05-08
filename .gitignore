@@ -1,0 +1,19 @@
+# .NET build output
+bin/
+obj/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+
+# Rider
+*.DotSettings.user
+
+# macOS
+.DS_Store
+
+# Claude Code per-machine settings
+.claude/settings.local.json
