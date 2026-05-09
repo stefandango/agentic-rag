@@ -1,0 +1,13 @@
+<Project>
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Add package versions here, e.g. -->
+    <!-- <PackageVersion Include="Anthropic.SDK" Version="x.y.z" /> -->
+  </ItemGroup>
+
+</Project>
