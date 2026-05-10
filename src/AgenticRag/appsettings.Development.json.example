@@ -1,0 +1,14 @@
+{
+  "Ollama": {
+    "Endpoint": "http://your-pi.tailnet:11434"
+  },
+  "Qdrant": {
+    "Endpoint": "http://your-pi.tailnet:6334",
+    "ApiKey": "your-qdrant-api-key",
+    "Collection": "vault"
+  },
+  "EmbedPipeline": {
+    "Endpoint": "http://your-pi.tailnet:8000",
+    "EmbedPath": "/embed"
+  }
+}

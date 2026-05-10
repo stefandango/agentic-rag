@@ -17,3 +17,6 @@ obj/
 
 # Claude Code per-machine settings
 .claude/settings.local.json
+
+# Local-only secrets / endpoints
+src/AgenticRag/appsettings.Development.json
