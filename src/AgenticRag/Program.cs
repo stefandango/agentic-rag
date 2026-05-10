@@ -47,12 +47,12 @@ services.AddSingleton(sp =>
     return new QdrantClient(new Uri(opts.Endpoint), apiKey: apiKey);
 });
 
-services.AddSingleton<IVaultTools, VaultTools>();
+services.AddSingleton<IKnowledgeTools, KnowledgeTools>();
 
 await using var provider = services.BuildServiceProvider();
 
-var tools = provider.GetRequiredService<IVaultTools>();
-var result = await tools.SearchVault(query, topK: 5);
+var tools = provider.GetRequiredService<IKnowledgeTools>();
+var result = await tools.SearchKnowledge(query, topK: 5);
 
 var json = JsonSerializer.Serialize(result, new JsonSerializerOptions
 {

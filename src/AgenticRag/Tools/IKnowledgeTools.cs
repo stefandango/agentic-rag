@@ -10,21 +10,23 @@ namespace AgenticRag.Tools;
 /// and their signatures are sketched as comments at the bottom of this file so the
 /// result-shape conventions are visible while the read surface stabilises.
 /// </remarks>
-public interface IVaultTools
+public interface IKnowledgeTools
 {
     /// <summary>
-    /// Semantic search over the indexed Obsidian vault.
+    /// Semantic search across indexed knowledge sources.
     /// </summary>
     /// <param name="query">Natural-language query — embedded with the same model as the indexer.</param>
     /// <param name="topK">Maximum number of hits to return.</param>
-    /// <param name="tags">If supplied, restrict to notes whose tag list contains <em>any</em> of these (OR / Qdrant <c>MatchAny</c>).</param>
+    /// <param name="sources">If supplied, restrict to hits whose payload <c>source</c> matches <em>any</em> of these (OR / Qdrant <c>MatchAny</c>). v0.5 only indexes the vault, so the only meaningful value today is <c>"vault"</c>.</param>
+    /// <param name="tags">If supplied, restrict to notes whose tag list contains <em>any</em> of these (OR / <c>MatchAny</c>).</param>
     /// <param name="type">If supplied, restrict to notes with this <c>note_type</c> (exact match — e.g. <c>note</c>, <c>project</c>, <c>daily</c>, <c>blog</c>, <c>board</c>).</param>
     /// <param name="folders">If supplied, restrict to notes whose ancestor-folder list contains <em>any</em> of these (OR / <c>MatchAny</c>). Pass parent paths like <c>"projects"</c> or <c>"projects/Self-Reliance Migration"</c>.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>Ordered list of hits (highest score first), or a failure envelope.</returns>
-    Task<ToolResult<IReadOnlyList<SearchHit>>> SearchVault(
+    Task<ToolResult<IReadOnlyList<SearchHit>>> SearchKnowledge(
         string query,
         int topK = 5,
+        string[]? sources = null,
         string[]? tags = null,
         string? type = null,
         string[]? folders = null,
@@ -60,17 +62,6 @@ public interface IVaultTools
     /// <param name="ct">Cancellation token.</param>
     Task<ToolResult<IReadOnlyList<DailyNoteRef>>> ListRecentDailyNotes(int days, CancellationToken ct = default);
 
-    /// <summary>
-    /// Semantic search over Karakeep bookmarks.
-    /// </summary>
-    /// <param name="query">Natural-language query.</param>
-    /// <param name="topK">Maximum number of hits to return.</param>
-    /// <param name="ct">Cancellation token.</param>
-    Task<ToolResult<IReadOnlyList<SearchHit>>> SearchKarakeep(
-        string query,
-        int topK = 5,
-        CancellationToken ct = default);
-
     // ---------------------------------------------------------------------
     // v1 write-tool sketches — signatures only. Same ToolResult<T> envelope;
     // effect-only tools use ToolResult<Unit>.
@@ -94,7 +85,7 @@ public interface IVaultTools
 }
 
 /// <summary>
-/// Full content of a single vault note as returned by <see cref="IVaultTools.GetNoteByPath"/>.
+/// Full content of a single vault note as returned by <see cref="IKnowledgeTools.GetNoteByPath"/>.
 /// </summary>
 /// <param name="Path">Vault-relative path of the note.</param>
 /// <param name="Body">Markdown body with frontmatter stripped.</param>
@@ -105,7 +96,7 @@ public record NoteContent(
     IReadOnlyDictionary<string, object?> Frontmatter);
 
 /// <summary>
-/// A pointer to a daily note returned by <see cref="IVaultTools.ListRecentDailyNotes"/>.
+/// A pointer to a daily note returned by <see cref="IKnowledgeTools.ListRecentDailyNotes"/>.
 /// </summary>
 /// <param name="Date">The calendar date the daily note belongs to.</param>
 /// <param name="Path">Vault-relative path to the note file.</param>

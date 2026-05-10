@@ -10,25 +10,25 @@ using static Qdrant.Client.Grpc.Conditions;
 namespace AgenticRag.Tools;
 
 /// <summary>
-/// v0.5 implementation of <see cref="IVaultTools"/>. Only <see cref="SearchVault"/> is wired —
-/// the other four methods return <see cref="ToolResult{T}.Failure"/> with <c>"not implemented"</c>
+/// v0.5 implementation of <see cref="IKnowledgeTools"/>. Only <see cref="SearchKnowledge"/> is wired —
+/// the other three methods return <see cref="ToolResult{T}.Failure"/> with <c>"not implemented"</c>
 /// so the agent loop can be developed against the full surface.
 /// </summary>
 /// <remarks>
 /// Query vectors are produced by the same external embed pipeline that the indexer used,
 /// so there is no model drift between index-time and query-time embeddings.
 /// </remarks>
-public sealed class VaultTools : IVaultTools
+public sealed class KnowledgeTools : IKnowledgeTools
 {
     private readonly AgenticRagOptions _options;
-    private readonly ILogger<VaultTools> _logger;
+    private readonly ILogger<KnowledgeTools> _logger;
     private readonly EmbedPipelineClient _embed;
     private readonly QdrantClient _qdrant;
 
     /// <summary>Construct with bound options, a logger, the embed pipeline client, and a Qdrant client.</summary>
-    public VaultTools(
+    public KnowledgeTools(
         IOptions<AgenticRagOptions> options,
-        ILogger<VaultTools> logger,
+        ILogger<KnowledgeTools> logger,
         EmbedPipelineClient embed,
         QdrantClient qdrant)
     {
@@ -44,9 +44,10 @@ public sealed class VaultTools : IVaultTools
     }
 
     /// <inheritdoc />
-    public async Task<ToolResult<IReadOnlyList<SearchHit>>> SearchVault(
+    public async Task<ToolResult<IReadOnlyList<SearchHit>>> SearchKnowledge(
         string query,
         int topK = 5,
+        string[]? sources = null,
         string[]? tags = null,
         string? type = null,
         string[]? folders = null,
@@ -69,7 +70,7 @@ public sealed class VaultTools : IVaultTools
                 $"embed service unreachable or invalid response: {ex.Message}");
         }
 
-        var filter = BuildFilter(tags, type, folders);
+        var filter = BuildFilter(sources, tags, type, folders);
 
         IReadOnlyList<ScoredPoint> points;
         try
@@ -91,7 +92,7 @@ public sealed class VaultTools : IVaultTools
                 $"vector search failed: {ex.Message}");
         }
 
-        var hits = points.Select(MapToSearchHit).ToList();
+        var hits = points.Select(p => MapToSearchHit(p, _logger)).ToList();
         return ToolResult<IReadOnlyList<SearchHit>>.Success(hits);
     }
 
@@ -108,13 +109,14 @@ public sealed class VaultTools : IVaultTools
     public Task<ToolResult<IReadOnlyList<DailyNoteRef>>> ListRecentDailyNotes(int days, CancellationToken ct = default)
         => Task.FromResult(ToolResult<IReadOnlyList<DailyNoteRef>>.Failure("not implemented"));
 
-    /// <inheritdoc />
-    public Task<ToolResult<IReadOnlyList<SearchHit>>> SearchKarakeep(string query, int topK = 5, CancellationToken ct = default)
-        => Task.FromResult(ToolResult<IReadOnlyList<SearchHit>>.Failure("not implemented"));
-
-    private static Filter? BuildFilter(string[]? tags, string? type, string[]? folders)
+    private static Filter? BuildFilter(string[]? sources, string[]? tags, string? type, string[]? folders)
     {
         var conditions = new List<Condition>();
+
+        if (sources is { Length: > 0 })
+        {
+            conditions.Add(MatchAnyKeyword("source", sources));
+        }
 
         if (tags is { Length: > 0 })
         {
@@ -155,7 +157,7 @@ public sealed class VaultTools : IVaultTools
         };
     }
 
-    private static SearchHit MapToSearchHit(ScoredPoint point)
+    private static SearchHit MapToSearchHit(ScoredPoint point, ILogger logger)
     {
         var payload = point.Payload;
 
@@ -175,6 +177,8 @@ public sealed class VaultTools : IVaultTools
 
         var title = FirstNonEmpty(heading, noteTitle) ?? DeriveTitleFromPath(path);
 
+        var source = MapSource(ReadString(payload, "source"), logger);
+
         var vault = new VaultMetadata(
             Heading: heading,
             NoteType: noteType,
@@ -191,12 +195,31 @@ public sealed class VaultTools : IVaultTools
 
         return new SearchHit(
             Id: FormatPointId(point.Id),
-            Source: SearchHitSource.Vault,
+            Source: source,
             Path: path,
             Title: title,
             Snippet: snippet,
             Score: point.Score,
             Metadata: meta);
+    }
+
+    private static SearchHitSource MapSource(string? raw, ILogger logger)
+    {
+        if (string.IsNullOrEmpty(raw))
+        {
+            // v0.5 only indexes the vault; older points predate the `source` field.
+            return SearchHitSource.Vault;
+        }
+        if (string.Equals(raw, "vault", StringComparison.OrdinalIgnoreCase))
+        {
+            return SearchHitSource.Vault;
+        }
+        if (string.Equals(raw, "karakeep", StringComparison.OrdinalIgnoreCase))
+        {
+            return SearchHitSource.Karakeep;
+        }
+        logger.LogWarning("unknown payload source {Source}; treating as vault", raw);
+        return SearchHitSource.Vault;
     }
 
     private static string? FirstNonEmpty(params string?[] candidates)
