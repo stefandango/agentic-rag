@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <RootNamespace>AgenticRag.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <!-- Test method names use underscores; tests pass concrete args by design. -->
+    <NoWarn>$(NoWarn);CA1707;CA2007;CA1515;CA1062;CA5394</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Xunit.SkippableFact" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/AgenticRag/AgenticRag.csproj" />
+  </ItemGroup>
+
+  <!--
+    Same config layering as Program.cs: appsettings.json holds safe localhost
+    defaults; appsettings.Development.json (gitignored, may be absent in CI)
+    overrides with the real Pi tailnet endpoint + key. When it's absent, the
+    fixture's collection probe fails and integration tests skip rather than fail.
+  -->
+  <ItemGroup>
+    <None Include="../../src/AgenticRag/appsettings.json"
+          Link="appsettings.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../src/AgenticRag/appsettings.Development.json"
+          Link="appsettings.Development.json"
+          CopyToOutputDirectory="PreserveNewest"
+          Condition="Exists('../../src/AgenticRag/appsettings.Development.json')" />
+  </ItemGroup>
+
+</Project>

@@ -21,6 +21,7 @@
 
 ## Project notes
 
-- Single-project repo (`AgenticRag.csproj`). No test project yet — `dotnet test` is a no-op until one is added.
+- `src/AgenticRag` (app) + `tests/AgenticRag.Tests` (xUnit). `dotnet test` runs the suite.
+- Tool tests are integration tests against the real Qdrant. They use `[SkippableFact]` + a collection-existence probe, so they **skip** (not fail) when `appsettings.Development.json` (the Pi override) is absent — e.g. in CI. Validation-path tests run everywhere.
 - Targets `net10.0`. Nullable reference types are on; treat warnings seriously.
 - `.claude/settings.json` already has a hook that blocks force-push to `main`.

@@ -43,7 +43,11 @@ services.AddHttpClient<EmbedPipelineClient>();
 services.AddSingleton(sp =>
 {
     var opts = sp.GetRequiredService<IOptions<AgenticRagOptions>>().Value.Qdrant;
-    var apiKey = string.IsNullOrEmpty(opts.ApiKey) ? null : opts.ApiKey;
+    // QDRANT_API_KEY env var wins over the config value so the key can rotate
+    // without editing appsettings; fall back to Qdrant.ApiKey, then no auth.
+    var envKey = Environment.GetEnvironmentVariable("QDRANT_API_KEY");
+    var apiKey = !string.IsNullOrEmpty(envKey) ? envKey
+        : string.IsNullOrEmpty(opts.ApiKey) ? null : opts.ApiKey;
     return new QdrantClient(new Uri(opts.Endpoint), apiKey: apiKey);
 });
 

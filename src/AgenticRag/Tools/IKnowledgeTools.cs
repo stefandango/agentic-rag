@@ -35,6 +35,19 @@ public interface IKnowledgeTools
     /// <summary>
     /// Fetch a full note by its vault-relative path.
     /// </summary>
+    /// <remarks>
+    /// The v0.5 implementation has no filesystem access and <em>reconstructs</em> the note
+    /// from its indexed Qdrant chunks: body text is re-stitched and frontmatter is rebuilt
+    /// from indexed payload keys only. Non-indexed frontmatter keys and original YAML
+    /// formatting are therefore <strong>not</strong> preserved. Consequence: when the agent
+    /// quotes a note fetched this way ("here's what the note says", citations), it is
+    /// quoting a reconstruction, not the source bytes.
+    /// <para>
+    /// v1 annotation tools (e.g. <c>AnnotateInboxNote</c>) that write back to the filesystem
+    /// should read the note from the filesystem, NOT via this method — a write path cannot
+    /// preserve frontmatter/formatting it never saw.
+    /// </para>
+    /// </remarks>
     /// <param name="path">Vault-relative path, e.g. <c>"projects/Self-Reliance Migration.md"</c>.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>Note body and parsed frontmatter, or a failure envelope.</returns>
@@ -45,6 +58,13 @@ public interface IKnowledgeTools
     /// At least one of <paramref name="tags"/> or <paramref name="type"/> must be non-null/non-empty;
     /// implementations should return <see cref="ToolResult{T}.Failure"/> otherwise.
     /// </summary>
+    /// <remarks>
+    /// This is a filter-only scroll with no query vector, so every returned
+    /// <see cref="SearchHit.Score"/> is <c>0</c> — structurally meaningless, not a relevance
+    /// signal. Callers must NOT rank these hits by score or compare their scores against
+    /// hits from <see cref="SearchKnowledge"/> (doing so sinks every filter hit to the
+    /// bottom regardless of relevance). Results are returned title-ordered for this reason.
+    /// </remarks>
     /// <param name="tags">Tags to match (OR / <c>MatchAny</c>) against each note's tag list.</param>
     /// <param name="type">Exact <c>note_type</c> to match.</param>
     /// <param name="limit">Maximum number of hits to return.</param>

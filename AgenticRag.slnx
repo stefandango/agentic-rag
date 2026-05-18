@@ -1,3 +1,4 @@
 <Solution>
   <Project Path="src/AgenticRag/AgenticRag.csproj" />
+  <Project Path="tests/AgenticRag.Tests/AgenticRag.Tests.csproj" />
 </Solution>
