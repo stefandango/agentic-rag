@@ -1,48 +1,54 @@
 # agentic-rag
 
-An agentic retrieval system over a personal knowledge base. A .NET console agent
-takes a question, decides *how* to search — which tool, which filters, whether to
-look again — runs the retrieval against an indexed knowledge store, and synthesises
-an answer with citations back to the source notes.
+A .NET-based agentic RAG system for personal knowledge retrieval over an indexed
+Obsidian vault.
 
-"Agentic" is the distinction from plain RAG. Plain RAG embeds the query, pulls
-top-K chunks, and stuffs them into one prompt. Here the LLM drives the retrieval:
-it picks between semantic search, a metadata filter, a direct note fetch, or a
-date-ranged listing, and it can chain calls when the first result isn't enough.
+Unlike plain RAG pipelines, the agent dynamically chooses retrieval strategies —
+semantic search, metadata filtering, direct note fetches, or temporal queries —
+and can chain retrieval calls before synthesizing an answer with citations.
 
 The tool surface is source-agnostic by design. v0.5 ships with the Obsidian vault
-as the only source; v1 adds Karakeep bookmarks via the data-source integration
-template, and the tool surface doesn't change.
+as the only source; additional sources are added by indexing them into the same
+store under a `source` tag — the tool surface doesn't change.
 
 ## Architecture (v0.5)
 
-```
-                          your machine (any Headscale-joined host)
-  ┌──────────────────────────────────────────────────────────────────┐
-  │                                                                    │
-  │   CLI            hand-rolled agent loop            IKnowledgeTools  │
-  │  "question"  ──►  ┌───────────────────┐  dispatch  ┌────────────┐  │
-  │                   │ 1. tool-use turn  │ ─────────► │ search /   │  │
-  │                   │ 2. execute tool   │            │ fetch /    │  │
-  │                   │ 3. synthesis turn │ ◄───────── │ list       │  │
-  │                   └─────────┬─────────┘  results   └─────┬──────┘  │
-  │     answer  ◄───────────────┘                            │         │
-  │  + Sources:                                              │         │
-  └───────────────────────────┬──────────────────────────────┼────────┘
-                               │ chat + tool-use              │ over the tailnet
-                               ▼                              ▼
-                    ┌─────────────────────┐      ┌──────────────────────────┐
-                    │  Mistral API (EU)   │      │  Raspberry Pi 5           │
-                    │  mistral-medium     │      │  embed-pipeline /embed    │
-                    │  (default profile)  │      │  Qdrant (gRPC, vault)     │
-                    └─────────────────────┘      └──────────────────────────┘
+```mermaid
+flowchart TB
+    cli["CLI<br/>question in, answer + Sources: out"]
+
+    subgraph host["Your machine — any Headscale-joined host"]
+        loop["Hand-rolled agent loop<br/>1. tool-use turn → 2. execute → 3. synthesis turn"]
+        tools["IKnowledgeTools<br/>search · fetch · list (read-only)"]
+    end
+
+    subgraph cloud["Hosted LLM API"]
+        mistral["Chat + tool-use model<br/>default profile"]
+    end
+
+    subgraph pi["Raspberry Pi 5 — reachable only over the tailnet"]
+        embed["embed-pipeline<br/>POST /embed (all-MiniLM-L6-v2)"]
+        qdrant["Qdrant<br/>gRPC · vault collection"]
+    end
+
+    cli --> loop
+    loop -- "chat + tool-use" --> mistral
+    mistral -- "tool calls / synthesis" --> loop
+    loop -- "dispatch" --> tools
+    tools -- "query vector" --> embed
+    tools -- "vector + filter search" --> qdrant
+    embed -- "384-d vector" --> tools
+    qdrant -- "ranked hits" --> tools
+    tools -- "results" --> loop
+    loop --> cli
 ```
 
 The agent owns orchestration and synthesis. It owns no data: query vectors come
 from the same embed-pipeline that built the index, and retrieval hits come from a
 Qdrant collection populated by that pipeline. Both run on a Raspberry Pi and are
-reachable only over the Headscale tailnet. The LLM is Mistral's EU-jurisdictional
-API by default; vault chunks travel to it as tool results.
+reachable only over the Headscale tailnet. The default profile is a hosted LLM
+API; vault chunks travel to it as tool results. Which provider, and why, is in
+*The two LLM profiles* below.
 
 ## What v0.5 does
 
@@ -62,7 +68,11 @@ the results back, and repeats until the model answers in prose or a five-turn
 budget forces synthesis. When the answer draws on retrieved notes it ends with a
 `Sources:` block, one `- [Title] (path)` line per note, deduplicated by path.
 
-A worked example, against the default Mistral profile:
+A worked example. The point is structural: the answer is built from retrieved
+chunks, not the model's priors — note the specific model name, the reuse
+rationale, and the named-vector constraint, all lifted from the indexed notes,
+and the `Sources:` line pointing back at them. Output trimmed to the first item;
+the synthesis style is the LLM's, not the project's.
 
 ```
 $ dotnet run --project src/AgenticRag -- "what did I decide about embedding models"
@@ -74,27 +84,16 @@ You decided the following about embedding models in your **agentic-rag** project
    - **Rationale**: Reuse the existing pipeline and Qdrant collection, which is already indexed with this model at section-level granularity. This avoids unnecessary rebuilding and maintains consistency.
    - **Constraint**: The Qdrant collection uses a named vector (`fast-all-minilm-l6-v2`), so any query must specify this vector name to avoid errors.
 
-2. **Spike Model**:
-   - The spike (experimental/prototype) embedding model can differ (e.g., `nomic-embed-text` via Ollama) since it uses a throwaway corpus. This flexibility allows for testing without affecting the production pipeline.
-
-3. **Query Embedding**:
-   - The agent embeds queries using the same `all-MiniLM-L6-v2` model via an HTTP endpoint (`/embed`) exposed by the `embed-pipeline` service. This ensures bit-identical vectors between queries and the indexed corpus, resolving potential embedding-model-drift issues.
-
-4. **Operational Constraints**:
-   - The embedding endpoint is bound to the Pi's Headscale IP (`your-host:8000`), making it accessible only within the Tailnet.
-
----
+# ... items 2–4 (spike model, query embedding, tailnet binding) elided ...
 
 ### Sources:
 - [Decisions](projects/agentic-rag/index.md)
 ```
 
-The answer is grounded in retrieved chunks — the model is summarising the project's
-own decision record, not its priors.
-
 ## What v0.5 does not do
 
-No Karakeep ingestion in any form. No write-back — every tool is read-only. No MCP
+No ingestion of any additional source — the vault is the only index. No
+write-back — every tool is read-only. No MCP
 server mode. No multi-step query reformulation beyond what one loop's worth of tool
 calls covers. No scheduled jobs, no inbox watcher. No observability or tracing. No
 web UI — the interface is the CLI. These are v0.5's boundaries, listed so the scope
@@ -124,10 +123,23 @@ Real measurements, not extrapolation:
 suite re-run against `mistral-medium-latest` 2026-05-17. The Mistral cold-start
 outlier (2.56s) settles to sub-second on subsequent calls.*
 
-Switching profiles is a one-line config change (`Llm:Profile` = `mistral` or
-`ollama`), no code change.
+Switching profiles is one key in `appsettings.json`, no code change — the loop
+only ever sees the `IChatClient` abstraction:
+
+```json
+{
+  "Llm": {
+    "Profile": "ollama"   // "mistral" (default) | "ollama"
+  }
+}
+```
 
 ## Requirements to run it
+
+v0.5 is built to run against a specific home-lab setup, and the list below
+reflects that honestly rather than hiding it. Forking the work means standing up
+the equivalent components — chiefly the embed-pipeline and an indexed Qdrant
+collection (see *Dependencies*).
 
 - **.NET 10 SDK.**
 - **A Mistral API key**, in the `MISTRAL_API_KEY` environment variable (for the
@@ -171,9 +183,10 @@ annotation tools will read from disk instead.
 **Source-agnostic tool surface, vault-only index.** The search tool is
 `SearchKnowledge` with a `sources` filter, not `SearchVault`, even though the vault
 is the only thing indexed today. Per-source tools (`search_vault`,
-`search_karakeep`, …) are a fan-out anti-pattern: the agent ends up choosing which
-source to query instead of the system unifying retrieval. v1 adds Karakeep as a
-second `source` in the same collection — the tool surface stays put.
+`search_bookmarks`, …) are a fan-out anti-pattern: the agent ends up choosing
+which source to query instead of the system unifying retrieval. A new source is
+just more points in the same collection under a different `source` value — the
+tool surface stays put.
 
 **Query vectors come from the embed-pipeline's HTTP endpoint.** Query and index
 vectors must come from the same model or similarity scores are meaningless. Rather
@@ -196,14 +209,15 @@ thesis purity. Mistral closes the latency gap ~15–20× and is EU-jurisdictiona
 preserving a defensible data-sovereignty story; keeping Pi-Ollama as a one-config
 switch preserves the offline path without keeping dead code.
 
-## Related components
+## Dependencies
 
-- **embed-pipeline** — the separate service that chunks the vault, embeds it with
-  `sentence-transformers/all-MiniLM-L6-v2`, and maintains the Qdrant collection
-  this agent queries. Not part of this repo; a hard runtime dependency.
-- This project sits inside a broader self-hosted infrastructure migration; the
-  agent is what makes that stack queryable end-to-end.
+**embed-pipeline** — a separate service, not part of this repo and a hard runtime
+prerequisite. It chunks the vault at `##`-section granularity, embeds each chunk
+with `sentence-transformers/all-MiniLM-L6-v2`, and owns the Qdrant collection this
+agent queries — including the `/embed` endpoint that produces query vectors and
+the delete-by-file reindex that keeps the collection consistent. This agent reads
+that collection; it never writes to it.
 
 ## License
 
-MIT.
+MIT — see [LICENSE](LICENSE).
