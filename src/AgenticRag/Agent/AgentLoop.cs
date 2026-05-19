@@ -25,7 +25,9 @@ public sealed class AgentLoop(IChatClient chat, IKnowledgeTools tools)
         "call any tool. If no available tool fits the request, say so plainly instead of forcing " +
         "an unrelated tool call. " +
         "When your answer draws on retrieved notes, list the source notes at the end under a " +
-        "'Sources:' heading, one per line as '- [Title] (path)', in the order you used them. " +
+        "'Sources:' heading, one per line as '- [Title] (path)', in the order you first used " +
+        "them. List each note at most once — dedupe by path, even when several retrieved " +
+        "chunks come from the same note. " +
         "Filter/list tool results are not relevance-ranked; do not infer importance from their " +
         "order or score.";
 

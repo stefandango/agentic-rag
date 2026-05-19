@@ -65,36 +65,6 @@ services.AddSingleton<AgentLoop>();
 
 await using var provider = services.BuildServiceProvider();
 
-// TEMPORARY retrieval diagnostic — remove after confabulation triage.
-// usage: dotnet run -- --search-debug <topK> <query...>
-if (args.Length >= 3 && args[0] == "--search-debug")
-{
-    var dbgTopK = int.Parse(args[1], System.Globalization.CultureInfo.InvariantCulture);
-    var dbgQuery = string.Join(' ', args.Skip(2));
-    var kt = provider.GetRequiredService<IKnowledgeTools>();
-    var r = await kt.SearchKnowledge(dbgQuery, topK: dbgTopK);
-    if (!r.Ok)
-    {
-        Console.Error.WriteLine("SearchKnowledge failed: " + r.Error);
-        return 1;
-    }
-    var rank = 1;
-    foreach (var h in r.Value!)
-    {
-        var snip = h.Snippet.ReplaceLineEndings(" ");
-        if (snip.Length > 220)
-        {
-            snip = snip[..220] + "…";
-        }
-        Console.WriteLine($"#{rank,-2} score={h.Score:F4} type={h.Metadata.Vault?.NoteType}");
-        Console.WriteLine($"    path : {h.Path}");
-        Console.WriteLine($"    title: {h.Title}");
-        Console.WriteLine($"    snip : {snip}");
-        rank++;
-    }
-    return 0;
-}
-
 var profile = provider.GetRequiredService<IOptions<AgenticRagOptions>>().Value.Llm.Profile;
 var logger = provider.GetRequiredService<ILoggerFactory>().CreateLogger("agentic-rag");
 
