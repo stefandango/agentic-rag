@@ -196,28 +196,6 @@ thesis purity. Mistral closes the latency gap ~15–20× and is EU-jurisdictiona
 preserving a defensible data-sovereignty story; keeping Pi-Ollama as a one-config
 switch preserves the offline path without keeping dead code.
 
-## Roadmap (v1)
-
-Rough priority order, not commitments:
-
-1. **Karakeep bookmarks**, via the data-source integration template — a webhook
-   listener fetches each new bookmark, embeds it with the same model, and writes
-   it into the same Qdrant collection with `source: "karakeep"`. The agent's tool
-   surface does not change; the index gains a second source. This is also the
-   reference implementation that makes later sources (Miniflux, Mealie, …) cheap
-   additive work rather than rearchitectures.
-2. **Annotation-only write-back** — append frontmatter, summaries, and proposed
-   filing into existing notes; create files in `daily/` and `inbox/`. Never move,
-   delete, or overwrite human-written content.
-3. **Scheduled jobs** — a morning brief and similar, delivered as a vault file.
-4. **Inbox watcher** — annotate new `inbox/` files with a proposed location and
-   tags for review during normal triage.
-5. **MCP server mode** — expose the same tools so Claude or any MCP host can use
-   them without an adapter.
-
-v1's order will be reshaped by living with v0.5: whatever hurts most in real use
-gets priority over this list. That's a deliberate discipline, not vagueness.
-
 ## Related components
 
 - **embed-pipeline** — the separate service that chunks the vault, embeds it with
