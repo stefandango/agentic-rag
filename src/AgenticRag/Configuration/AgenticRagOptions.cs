@@ -7,8 +7,8 @@ namespace AgenticRag.Configuration;
 /// </summary>
 public sealed class AgenticRagOptions
 {
-    /// <summary>Ollama (LLM chat) endpoint config. Embedding lives in <see cref="EmbedPipelineOptions"/>.</summary>
-    public OllamaOptions Ollama { get; set; } = new();
+    /// <summary>LLM chat/tool-use config (profile selection + per-profile settings).</summary>
+    public LlmOptions Llm { get; set; } = new();
 
     /// <summary>Qdrant vector DB endpoint config.</summary>
     public QdrantOptions Qdrant { get; set; } = new();
@@ -17,14 +17,57 @@ public sealed class AgenticRagOptions
     public KarakeepOptions Karakeep { get; set; } = new();
 }
 
-/// <summary>Ollama endpoint and chat model selection. Embedding does NOT go through Ollama in v0.5.</summary>
-public sealed class OllamaOptions
+/// <summary>
+/// LLM configuration. The agent loop is provider-agnostic: it talks to whichever
+/// profile <see cref="Profile"/> selects via the <c>IChatClient</c> abstraction.
+/// </summary>
+public sealed class LlmOptions
 {
-    /// <summary>Base URL of the Ollama server, e.g. <c>http://pi:11434</c>.</summary>
-    public string Endpoint { get; set; } = "http://localhost:11434";
+    /// <summary>Active profile name — <c>mistral</c> (default) or <c>ollama</c> (fallback).</summary>
+    public string Profile { get; set; } = "mistral";
 
-    /// <summary>Chat / tool-use model. Confirmed working: <c>qwen2.5:3b</c>.</summary>
-    public string ChatModel { get; set; } = "qwen2.5:3b";
+    /// <summary>Mistral cloud profile (OpenAI-compatible HTTP).</summary>
+    public LlmProfile Mistral { get; set; } = new()
+    {
+        BaseUrl = "https://api.mistral.ai",
+        Model = "mistral-medium-latest",
+        ApiKeyEnv = "MISTRAL_API_KEY",
+    };
+
+    /// <summary>Pi-Ollama fallback profile (via OllamaSharp).</summary>
+    public LlmProfile Ollama { get; set; } = new()
+    {
+        BaseUrl = "http://localhost:11434",
+        Model = "qwen2.5:3b",
+        ApiKeyEnv = null,
+    };
+
+    /// <summary>The profile <see cref="Profile"/> resolves to. Defaults to Mistral on an unknown value.</summary>
+    public LlmProfile Active =>
+        string.Equals(Profile, "ollama", StringComparison.OrdinalIgnoreCase) ? Ollama : Mistral;
+
+    /// <summary>True when the active profile is the Ollama fallback.</summary>
+    public bool ActiveIsOllama =>
+        string.Equals(Profile, "ollama", StringComparison.OrdinalIgnoreCase);
+}
+
+/// <summary>One LLM endpoint profile. Same shape for cloud and local.</summary>
+public sealed class LlmProfile
+{
+    /// <summary>Base URL, e.g. <c>https://api.mistral.ai</c> or <c>http://your-host:11434</c>.</summary>
+    public string BaseUrl { get; set; } = string.Empty;
+
+    /// <summary>Chat/tool-use model name.</summary>
+    public string Model { get; set; } = string.Empty;
+
+    /// <summary>Env var holding the bearer API key. Null/empty = no auth (local Ollama).</summary>
+    public string? ApiKeyEnv { get; set; }
+
+    /// <summary>Max completion tokens. 0 = leave to the provider default.</summary>
+    public int MaxTokens { get; set; } = 2048;
+
+    /// <summary>Sampling temperature. 0 for deterministic tool-use turns.</summary>
+    public double Temperature { get; set; }
 }
 
 /// <summary>Qdrant endpoint, auth, collection, and named-vector selection.</summary>

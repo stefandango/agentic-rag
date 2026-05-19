@@ -1,7 +1,7 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
+using AgenticRag.Agent;
 using AgenticRag.Configuration;
 using AgenticRag.Embedding;
+using AgenticRag.Llm;
 using AgenticRag.Tools;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,8 +9,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Qdrant.Client;
 
-// Throwaway Phase B smoke test — embeds the query via the external pipeline,
-// runs Qdrant search, prints JSON. Replaced when the agent loop lands.
+// v0.5 agent loop CLI: one question in, a synthesised answer out. One shot, no REPL.
 
 var query = args.Length > 0
     ? string.Join(' ', args)
@@ -18,7 +17,7 @@ var query = args.Length > 0
 
 if (string.IsNullOrWhiteSpace(query))
 {
-    Console.Error.WriteLine("usage: dotnet run -- \"<query>\"   (or pipe the query on stdin)");
+    Console.Error.WriteLine("usage: dotnet run -- \"<question>\"   (or pipe the question on stdin)");
     return 2;
 }
 
@@ -53,17 +52,62 @@ services.AddSingleton(sp =>
 
 services.AddSingleton<IKnowledgeTools, KnowledgeTools>();
 
+// Both LLM profiles live behind IChatClient; the loop never learns which is active.
+services.AddHttpClient<MistralChatClient>();
+services.AddSingleton<IChatClient>(sp =>
+{
+    var llm = sp.GetRequiredService<IOptions<AgenticRagOptions>>().Value.Llm;
+    return llm.ActiveIsOllama
+        ? new OllamaChatClient(sp.GetRequiredService<IOptions<AgenticRagOptions>>())
+        : sp.GetRequiredService<MistralChatClient>();
+});
+services.AddSingleton<AgentLoop>();
+
 await using var provider = services.BuildServiceProvider();
 
-var tools = provider.GetRequiredService<IKnowledgeTools>();
-var result = await tools.SearchKnowledge(query, topK: 5);
-
-var json = JsonSerializer.Serialize(result, new JsonSerializerOptions
+// TEMPORARY retrieval diagnostic — remove after confabulation triage.
+// usage: dotnet run -- --search-debug <topK> <query...>
+if (args.Length >= 3 && args[0] == "--search-debug")
 {
-    WriteIndented = true,
-    PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-    DictionaryKeyPolicy = JsonNamingPolicy.SnakeCaseLower,
-    Converters = { new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower) },
-});
-Console.WriteLine(json);
-return result.Ok ? 0 : 1;
+    var dbgTopK = int.Parse(args[1], System.Globalization.CultureInfo.InvariantCulture);
+    var dbgQuery = string.Join(' ', args.Skip(2));
+    var kt = provider.GetRequiredService<IKnowledgeTools>();
+    var r = await kt.SearchKnowledge(dbgQuery, topK: dbgTopK);
+    if (!r.Ok)
+    {
+        Console.Error.WriteLine("SearchKnowledge failed: " + r.Error);
+        return 1;
+    }
+    var rank = 1;
+    foreach (var h in r.Value!)
+    {
+        var snip = h.Snippet.ReplaceLineEndings(" ");
+        if (snip.Length > 220)
+        {
+            snip = snip[..220] + "…";
+        }
+        Console.WriteLine($"#{rank,-2} score={h.Score:F4} type={h.Metadata.Vault?.NoteType}");
+        Console.WriteLine($"    path : {h.Path}");
+        Console.WriteLine($"    title: {h.Title}");
+        Console.WriteLine($"    snip : {snip}");
+        rank++;
+    }
+    return 0;
+}
+
+var profile = provider.GetRequiredService<IOptions<AgenticRagOptions>>().Value.Llm.Profile;
+var logger = provider.GetRequiredService<ILoggerFactory>().CreateLogger("agentic-rag");
+
+try
+{
+    var loop = provider.GetRequiredService<AgentLoop>();
+    var answer = await loop.RunAsync(query);
+    Console.WriteLine(answer);
+    return 0;
+}
+catch (Exception ex)
+{
+    logger.LogError(ex, "agent loop failed (profile {Profile})", profile);
+    Console.Error.WriteLine($"error: {ex.Message}");
+    return 1;
+}
