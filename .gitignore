@@ -20,3 +20,6 @@ obj/
 
 # Local-only secrets / endpoints
 src/AgenticRag/appsettings.Development.json
+
+# nix build output symlink
+result
