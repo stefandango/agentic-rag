@@ -14,21 +14,29 @@ store under a `source` tag — the tool surface doesn't change.
 ## Architecture (v0.5)
 
 ```mermaid
+%%{init: {'theme':'base', 'themeVariables': {
+  'fontFamily': 'ui-sans-serif, -apple-system, Segoe UI, sans-serif',
+  'fontSize': '14px',
+  'primaryBorderColor': '#475569',
+  'lineColor': '#64748b'
+}}}%%
 flowchart TB
-    cli["CLI<br/>question in, answer + Sources: out"]
+    cli(["CLI<br/><span style='font-size:12px;color:#475569'>question in · answer + Sources: out</span>"])
 
-    subgraph host["Your machine — any Headscale-joined host"]
-        loop["Hand-rolled agent loop<br/>1. tool-use turn → 2. execute → 3. synthesis turn"]
-        tools["IKnowledgeTools<br/>search · fetch · list (read-only)"]
+    subgraph host["🧑 Your machine — any Headscale-joined host"]
+        direction TB
+        loop["Hand-rolled agent loop<br/><span style='font-size:12px;color:#475569'>1. tool-use turn → 2. execute → 3. synthesis turn</span>"]
+        tools["IKnowledgeTools<br/><span style='font-size:12px;color:#475569'>search · fetch · list (read-only)</span>"]
     end
 
-    subgraph cloud["Hosted LLM API"]
-        mistral["Chat + tool-use model<br/>default profile"]
+    subgraph cloud["☁️ Hosted LLM API"]
+        mistral["Chat + tool-use model<br/><span style='font-size:12px;color:#475569'>default profile</span>"]
     end
 
-    subgraph pi["Raspberry Pi 5 — reachable only over the tailnet"]
-        embed["embed-pipeline<br/>POST /embed (all-MiniLM-L6-v2)"]
-        qdrant["Qdrant<br/>gRPC · vault collection"]
+    subgraph pi["🏠 Raspberry Pi 5 — reachable only over the tailnet"]
+        direction TB
+        embed["embed-pipeline<br/><span style='font-size:12px;color:#475569'>POST /embed · all-MiniLM-L6-v2</span>"]
+        qdrant[("Qdrant<br/><span style='font-size:12px;color:#475569'>gRPC · vault collection</span>")]
     end
 
     cli --> loop
@@ -41,6 +49,22 @@ flowchart TB
     qdrant -- "ranked hits" --> tools
     tools -- "results" --> loop
     loop --> cli
+
+    classDef hostStyle fill:#e8f4f8,stroke:#2980b9,stroke-width:1.5px,color:#0f172a
+    classDef cloudStyle fill:#f4ecf7,stroke:#8e44ad,stroke-width:1.5px,color:#0f172a
+    classDef piStyle fill:#e8f8e8,stroke:#27ae60,stroke-width:1.5px,color:#0f172a
+    classDef cliStyle fill:#f8fafc,stroke:#475569,stroke-width:1.5px,color:#0f172a
+
+    class loop,tools hostStyle
+    class mistral cloudStyle
+    class embed,qdrant piStyle
+    class cli cliStyle
+
+    style host fill:#f0f9ff,stroke:#0284c7,stroke-width:1px,color:#0c4a6e
+    style cloud fill:#faf5ff,stroke:#7c3aed,stroke-width:1px,color:#581c87
+    style pi fill:#f0fdf4,stroke:#16a34a,stroke-width:1px,color:#14532d
+
+    linkStyle default stroke:#64748b,stroke-width:1.5px
 ```
 
 The agent owns orchestration and synthesis. It owns no data: query vectors come
@@ -119,9 +143,9 @@ Real measurements, not extrapolation:
 | Mistral `mistral-medium-latest` | 0.44–2.56s (typically ~0.5–0.8s) | ~8s |
 | qwen2.5:3b on Pi 5 (8GB) | 10–32s | ~45s |
 
-*Pi figures from the tool-use suite run 2026-04-24; Mistral figures from the same
-suite re-run against `mistral-medium-latest` 2026-05-17. The Mistral cold-start
-outlier (2.56s) settles to sub-second on subsequent calls.*
+*From a five-prompt tool-use suite: qwen2.5:3b on Pi 5 (2026-04-24) and
+`mistral-medium-latest` via API (2026-05-17). The upper end of the Mistral range
+is a cold-start; subsequent calls land sub-second.*
 
 Switching profiles is one key in `appsettings.json`, no code change — the loop
 only ever sees the `IChatClient` abstraction:
@@ -175,8 +199,7 @@ silently — flag this before forking the work.
 Because there is no filesystem access, `get_note_by_path` reconstructs a note from
 its indexed chunks and rebuilds frontmatter from payload fields. Original YAML
 formatting and non-indexed keys are not preserved. This is fine for feeding
-context to an LLM; it is *not* a fidelity-preserving read, which is why v1's
-annotation tools will read from disk instead.
+context to an LLM; it is *not* a fidelity-preserving read of the on-disk note.
 
 ## Architecture decisions worth flagging
 
@@ -184,9 +207,7 @@ annotation tools will read from disk instead.
 `SearchKnowledge` with a `sources` filter, not `SearchVault`, even though the vault
 is the only thing indexed today. Per-source tools (`search_vault`,
 `search_bookmarks`, …) are a fan-out anti-pattern: the agent ends up choosing
-which source to query instead of the system unifying retrieval. A new source is
-just more points in the same collection under a different `source` value — the
-tool surface stays put.
+which source to query instead of the system unifying retrieval.
 
 **Query vectors come from the embed-pipeline's HTTP endpoint.** Query and index
 vectors must come from the same model or similarity scores are meaningless. Rather
@@ -198,9 +219,9 @@ question disappears instead of being verified away.
 **Hand-rolled agent loop, no Semantic Kernel.** Four tools, one provider with one
 fallback, a single-turn CLI, no cross-conversation state. SK's tool-registration
 and orchestration abstractions buy nothing at this scope, and the rest of the
-codebase already talks to Qdrant and HTTP directly. SK would be the right call
-for multi-step retrieval, multi-provider routing, or MCP server mode — that's a
-v1 reason to revisit, not a v0.5 one.
+codebase already talks to Qdrant and HTTP directly. SK would earn its weight at
+a scope this project doesn't reach: multi-step retrieval, multi-provider routing,
+or exposing the tools as an MCP server.
 
 **Mistral default, Pi-Ollama as a profile.** The project's thesis is self-reliant
 infrastructure, which argues for the local model. But 45-second queries make a
