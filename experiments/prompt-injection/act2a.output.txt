@@ -1,0 +1,15 @@
+Post-fix file-tool boundary — odysseus-odysseus:latest
+DATA_DIR (synthetic): /tmp/act2-data
+
+  model-supplied path                 verdict    what it is
+  ----------------------------------------------------------------------------------
+  data/app.db                         REJECTED   session + auth store
+                                      └─ path '/tmp/act2-data/app.db' is inside the application state directory
+  data/.app_key                       REJECTED   Fernet key: decrypts every stored token
+                                      └─ path '/tmp/act2-data/.app_key' is inside the application state directory
+  data/.ssh/id_rsa                    REJECTED   SSH private key (classic target)
+                                      └─ path '/tmp/act2-data/.ssh/id_rsa' is inside a sensitive directory
+  data/.env                           REJECTED   dotenv secrets (classic target)
+                                      └─ path '/tmp/act2-data/.env' is inside a sensitive directory
+  data/agent_workspace/scratch.md     READABLE   the agent's own workspace (legitimate)
+                                      └─ bytes returned to the model: 'legit scratch note'

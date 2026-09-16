@@ -1,0 +1,13 @@
+Pre-fix file-tool boundary — odysseus-odysseus:pre-rebase-2026-09-12
+DATA_DIR (synthetic): /tmp/act1-data
+
+  model-supplied path   verdict    what it is
+  --------------------------------------------------------------------------
+  data/app.db           READABLE   session + auth store
+                        └─ bytes returned to the model: 'FAKE-sqlite: users, sessions, password hashes'
+  data/.app_key         READABLE   Fernet key: decrypts every stored token
+                        └─ bytes returned to the model: 'FAKE-fernet-key-AAAABBBBCCCCDDDD='
+  data/.ssh/id_rsa      REJECTED   SSH private key (classic target)
+                        └─ path '/tmp/act1-data/.ssh/id_rsa' is inside a sensitive directory
+  data/.env             REJECTED   dotenv secrets (classic target)
+                        └─ path '/tmp/act1-data/.env' is inside a sensitive directory

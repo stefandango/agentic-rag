@@ -1,0 +1,18 @@
+Post-fix action gate — odysseus-odysseus:latest
+
+1. Fresh run, nothing untrusted seen yet:
+     api_call     ALLOWED
+     write_note   ALLOWED
+
+2. The run fetches a feed. api_call returns article text — untrusted:
+     external_untrusted_context_seen = True
+
+3. The SAME calls, now that untrusted content is in the run:
+     api_call     REFUSED
+                  └─ External untrusted context has already influenced this run. Tool 'api_call' requires a separate user-authorized action because it can cause admin_change.
+     write_note   REFUSED
+                  └─ External untrusted context has already influenced this run. Tool 'write_note' requires a separate user-authorized action because it can cause unknown/high-impact.
+
+The first fetch is what arms the gate — which is why re-ordering the
+prompt cannot rescue an unattended run: by the time it has read anything
+worth acting on, acting is already refused.
