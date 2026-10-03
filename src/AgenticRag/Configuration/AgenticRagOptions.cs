@@ -63,6 +63,18 @@ public sealed class LlmProfile
     /// <summary>Env var holding the bearer API key. Null/empty = no auth (local Ollama).</summary>
     public string? ApiKeyEnv { get; set; }
 
+    /// <summary>
+    /// Literal bearer API key. Takes precedence over <see cref="ApiKeyEnv"/> when set.
+    /// Intended for the gitignored <c>appsettings.Development.json</c> override, not source control.
+    /// </summary>
+    public string? ApiKey { get; set; }
+
+    /// <summary>Resolved key: the literal <see cref="ApiKey"/> if set, else the value of <see cref="ApiKeyEnv"/>.</summary>
+    public string? ResolveApiKey() =>
+        !string.IsNullOrEmpty(ApiKey)
+            ? ApiKey
+            : string.IsNullOrEmpty(ApiKeyEnv) ? null : Environment.GetEnvironmentVariable(ApiKeyEnv);
+
     /// <summary>Max completion tokens. 0 = leave to the provider default.</summary>
     public int MaxTokens { get; set; } = 2048;
 

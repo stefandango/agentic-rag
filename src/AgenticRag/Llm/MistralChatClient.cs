@@ -40,8 +40,7 @@ public sealed class MistralChatClient(HttpClient http, IOptions<AgenticRagOption
             JsonSerializer.Serialize(request, Json), Encoding.UTF8, "application/json");
         using var httpMsg = new HttpRequestMessage(HttpMethod.Post, url) { Content = content };
 
-        var apiKey = string.IsNullOrEmpty(_p.ApiKeyEnv)
-            ? null : Environment.GetEnvironmentVariable(_p.ApiKeyEnv);
+        var apiKey = _p.ResolveApiKey();
         if (!string.IsNullOrEmpty(apiKey))
         {
             httpMsg.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);

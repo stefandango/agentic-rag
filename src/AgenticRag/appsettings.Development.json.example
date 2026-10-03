@@ -1,6 +1,11 @@
 {
-  "Ollama": {
-    "Endpoint": "http://your-pi.tailnet:11434"
+  "Llm": {
+    "Mistral": {
+      "ApiKey": "your-mistral-api-key"
+    },
+    "Ollama": {
+      "Endpoint": "http://your-pi.tailnet:11434"
+    }
   },
   "Qdrant": {
     "Endpoint": "http://your-pi.tailnet:6334",
